@@ -10,20 +10,25 @@ gdal.SetConfigOption('GDAL_CACHEMAX', '2048')
 gdal.SetConfigOption('GDAL_NUM_THREADS', 'ALL_CPUS')
 gdal.UseExceptions()
 
-
+# Creating the VRT from the input files
 def create_vrt(input_files, vrt_path):
     print(f"Creating VRT with {len(input_files)} files...", flush=True)
     gdal.BuildVRT(vrt_path, input_files)
     print(f"VRT created: {vrt_path}", flush=True)
 
-
+# Getting the VRT image size to compute chunks
 def get_vrt_size(vrt_path):
     vrt = gdal.Open(vrt_path)
     width = vrt.RasterXSize
     height = vrt.RasterYSize
     return width, height
 
-
+"""
+Check if a chunk is empty. 
+The candidate chunk is being written as a thumbnail, by specifying
+a very small output size (i.e. 1024x1024 on top of an input of 65536x65536)
+If the thumbnail is empty (all zeros) we will skip the chunk encoding.
+"""
 def is_chunk_empty(vrt_path, x_offset, y_offset, x_size, y_size, output_file):
     vrt_options = gdal.TranslateOptions(
             format='GTIFF',
@@ -40,12 +45,14 @@ def is_chunk_empty(vrt_path, x_offset, y_offset, x_size, y_size, output_file):
     os.remove(output_file)
     return all_zero
 
-
+"""
+Given the VRT, we will extract a chunk identifited by a rectangular area defined 
+by x,y offsets and x_size, y_size, and we write it as a COG, using deflate compression.
+"""
 def process_chunk(vrt_path, x, y, x_size, y_size, output_file, resampling, ov_levels):
     if not is_chunk_empty(vrt_path, x, y, x_size, y_size, output_file):
         
         print("Starting single chunk processing...")
-
         gdal.Translate(
             output_file,
             vrt_path,
@@ -57,6 +64,8 @@ def process_chunk(vrt_path, x, y, x_size, y_size, output_file, resampling, ov_le
                 'COMPRESS=DEFLATE', 
                 f'RESAMPLING={resampling}',
                 f'OVERVIEW_COUNT={ov_levels}',
+                'BLOCKXSIZE=512',
+                'BLOCKYSIZE=512',
                 'OVERVIEWS=IGNORE_EXISTING',
                 'SPARSE_OK=TRUE'
             ],
@@ -68,7 +77,9 @@ def process_chunk(vrt_path, x, y, x_size, y_size, output_file, resampling, ov_le
     else:
         print(f"Skipped empty chunk at position ({x}, {y})", flush=True)
 
-
+"""
+Rewrites the input VRT into multiple Chunk TIFFs in a concurrent processing
+"""
 def process_vrt(vrt_path, chunk_size, output_dir, max_workers, resampling, ov_levels):
     width, height = get_vrt_size(vrt_path)
     
@@ -117,9 +128,9 @@ if __name__ == '__main__':
     input_dir = sys.argv[1]
     output_dir = f"{sys.argv[2]}/{os.environ.get('NAME')}"
     vrt_path = f"{output_dir}/output.vrt"
-    chunk_size = 65536
-    max_workers = 2
-    resampling = 'bilinear'
-    ov_levels = 8
-    check_size = 1024
+    chunk_size = 65536      # The size in pixels (for both width and height) of the output chunk
+    max_workers = 2         # The number of workers to be used in concurrent processing
+    resampling = 'bilinear' # The resampling algorithm
+    ov_levels = 8           # The number of overviews
+    check_size = 1024       # The thumbnail's width and height used to check emtpy chunks
     main(input_dir, vrt_path, chunk_size, output_dir, max_workers, resampling, ov_levels)
