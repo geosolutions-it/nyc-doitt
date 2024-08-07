@@ -2,7 +2,7 @@ import os
 import sys
 import glob
 import numpy as np
-from osgeo import gdal
+from osgeo import gdal,osr
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
@@ -46,7 +46,7 @@ def is_chunk_empty(vrt_path, x_offset, y_offset, x_size, y_size, output_file):
     return all_zero
 
 """
-Given the VRT, we will extract a chunk identifited by a rectangular area defined 
+Given the VRT, we will extract a chunk identified by a rectangular area defined 
 by x,y offsets and x_size, y_size, and we write it as a COG, using deflate compression.
 """
 def process_chunk(vrt_path, x, y, x_size, y_size, output_file, resampling, ov_levels):
@@ -105,19 +105,57 @@ def process_vrt(vrt_path, chunk_size, output_dir, max_workers, resampling, ov_le
     print(f"Processing complete. Non-empty chunks saved in {output_dir}.", flush=True)
 
 
-def main(input_dir, vrt_path, chunk_size, output_dir, max_workers, resampling, ov_levels):
-    input_files = glob.glob(os.path.join(input_dir, '*.jp2'))
+def main(input_dir, vrt_path, chunk_size, output_dir, extension, max_workers, resampling, ov_levels):
+    pattern = f"*.{extension}"
+    input_files = [f for f in glob.glob(os.path.join(input_dir, pattern)) if '_warped' not in f]
     if not input_files:
         print(f"No files found in the directory: {input_dir}", flush=True)
         return
 
     os.makedirs(output_dir, exist_ok=True)
-
-    create_vrt(input_files, vrt_path)
+    processed_files = []
+    
+    for input_file in input_files:
+        if has_rotated_geotransform(input_file):
+            
+            # Correct the rotation
+            base_name, ext = os.path.splitext(os.path.basename(input_file))
+            output_file = os.path.join(input_dir, base_name + '_warped' + ext)
+            
+            # Check if the corrected file already exists
+            if not os.path.exists(output_file):
+                # Correct the rotation
+                print(f"Warping to remove rotated geotransformation from {input_file}", flush=True)
+                correct_rotation(input_file, output_file)
+                
+            processed_files.append(output_file)
+        else:
+            processed_files.append(input_file)
+    
+    create_vrt(processed_files, vrt_path)
     process_vrt(vrt_path, chunk_size, output_dir, max_workers, resampling, ov_levels)
     
     os.remove(vrt_path)
 
+
+def has_rotated_geotransform(filename):
+    dataset = gdal.Open(filename)
+    if dataset is None:
+        return False
+    geotransform = dataset.GetGeoTransform()
+    # Check if there is any rotation in the GeoTransformation coefficients
+    if geotransform[2] != 0 or geotransform[4] != 0:
+        return True
+    return False
+
+def correct_rotation(input_file, output_file):
+    src_ds = gdal.Open(input_file)
+
+    # Create a warped VRT (virtual dataset) with no rotation
+    vrt_ds = gdal.AutoCreateWarpedVRT(src_ds, None, None)
+
+    # Translate the VRT to a new file
+    gdal.Translate(output_file, vrt_ds)
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
@@ -127,10 +165,11 @@ if __name__ == '__main__':
 
     input_dir = sys.argv[1]
     output_dir = f"{sys.argv[2]}/{os.environ.get('NAME')}"
+    extension = os.environ.get('EXTENSION')
     vrt_path = f"{output_dir}/output.vrt"
     chunk_size = 65536      # The size in pixels (for both width and height) of the output chunk
     max_workers = 2         # The number of workers to be used in concurrent processing
     resampling = 'bilinear' # The resampling algorithm
     ov_levels = 8           # The number of overviews
     check_size = 1024       # The thumbnail's width and height used to check emtpy chunks
-    main(input_dir, vrt_path, chunk_size, output_dir, max_workers, resampling, ov_levels)
+    main(input_dir, vrt_path, chunk_size, output_dir, extension, max_workers, resampling, ov_levels)

@@ -1,5 +1,6 @@
 FROM python:3.12.4
 
+ENV EXTENSION="jp2"
 ENV OPERATION="deflate"
 ENV NAME="output"
 

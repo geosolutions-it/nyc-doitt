@@ -22,20 +22,48 @@ export GDAL_TIFF_INTERNAL_MASK=YES
 export GDAL_CACHEMAX=20%
 export CHECK_DISK_FREE_SPACE=FALSE
 
+listfile="$output_folder"/listfiles.txt
+> $listfile
+
+has_rotated_geotransform() {
+    gdalinfo "$1" | grep -A 2 "GeoTransform ="
+}
+
+
 # Creating different versions of VRT
 # One setting nodata to zero, to fill empty areas with zero needed to extract the binary mask
 # One without any nodata filler (to work with SPARSE files. See below)
-gdalbuildvrt "$result_folder"/group.vrt "$input_folder"/*.jp2 -vrtnodata "0 0 0 0"
-gdalbuildvrt "$result_folder"/sparse.vrt "$input_folder"/*.jp2 -vrtnodata none
+
+for file in "$input_folder"/*.${EXTENSION}; do
+    base_name="${file%.*}"
+    warped_file="${base_name}_warped.${EXTENSION}"
+
+    # Check if the file has a rotated GeoTransform
+    if [[ "$file" != *_warped.${EXTENSION} ]]; then
+        if has_rotated_geotransform "$file"; then
+            # If the file has a rotated GeoTransform, warp it and create a _warped file
+            if [ ! -f "$warped_file" ]; then
+                echo "$file has rotated geotransform. Warping it..."
+                gdalwarp -tr 0.5 0.5 "$file" "$warped_file"
+            fi
+            echo "$warped_file" >> $listfile
+        else
+            # If the file doesn't have a rotated GeoTransform, add it directly to the list
+            echo "$file" >> $listfile
+        fi
+    fi
+done
+
+gdalbuildvrt -input_file_list $listfile "$result_folder"/group.vrt -vrtnodata "0 0 0"
+gdalbuildvrt -input_file_list $listfile "$result_folder"/sparse.vrt -vrtnodata none
 gdal_translate -CO TILED=YES -a_nodata none "$result_folder"/group.vrt "$result_folder"/group.tif
 
 # Extracting the bands as separated VRTs, one for each band
 gdal_translate -b 1 -OF VRT "$result_folder"/group.tif "$result_folder"/group_b1.vrt
 gdal_translate -b 2 -OF VRT "$result_folder"/group.tif "$result_folder"/group_b2.vrt
 gdal_translate -b 3 -OF VRT "$result_folder"/group.tif "$result_folder"/group_b3.vrt
-gdal_translate -b 4 -OF VRT "$result_folder"/group.tif "$result_folder"/group_b4.vrt
 
-# Computing the binary mask so that when a pixel is zero for all 4 bands, 
+# Computing the binary mask so that when a pixel is zero for all 3 bands, 
 # the bitmask will be zero
 gdal_calc.py --format GTIFF --type=Byte \
     --creation-option=PHOTOMETRIC=MINISBLACK \
@@ -45,8 +73,7 @@ gdal_calc.py --format GTIFF --type=Byte \
     -A "$result_folder"/group_b1.vrt \
     -B "$result_folder"/group_b2.vrt \
     -C "$result_folder"/group_b3.vrt \
-    -D "$result_folder"/group_b4.vrt \
-    --calc="logical_not(logical_and(logical_and(A==0,B==0),logical_and(C==0,D==0)))" \
+    --calc="logical_not(logical_and(logical_and(A==0,B==0),C==0))" \
     --overwrite \
     --outfile "$result_folder"/group.msk.tif
 

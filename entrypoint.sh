@@ -1,5 +1,6 @@
 #!/bin/bash
 
+EXTENSION="${EXTENSION}"
 OPERATION="${OPERATION}"
 INPUT_DATA_FOLDER="/usr/src/app/input"
 OUTPUT_DATA_FOLDER="/usr/src/app/output"
