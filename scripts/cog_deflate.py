@@ -2,8 +2,7 @@ import os
 import sys
 import glob
 import numpy as np
-from osgeo import gdal,osr
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from osgeo import gdal
 
 
 gdal.SetConfigOption('GDAL_CACHEMAX', '2048')
@@ -64,8 +63,6 @@ def process_chunk(vrt_path, x, y, x_size, y_size, output_file, resampling, ov_le
                 'COMPRESS=DEFLATE', 
                 f'RESAMPLING={resampling}',
                 f'OVERVIEW_COUNT={ov_levels}',
-                'BLOCKXSIZE=512',
-                'BLOCKYSIZE=512',
                 'OVERVIEWS=IGNORE_EXISTING',
                 'SPARSE_OK=TRUE'
             ],
@@ -87,20 +84,20 @@ def process_vrt(vrt_path, chunk_size, output_dir, max_workers, resampling, ov_le
     total_chunks = ((width + chunk_size - 1) // chunk_size) * ((height + chunk_size - 1) // chunk_size)
     chunk_counter = 0
 
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = []
-        for x in range(0, width, chunk_size):
-            for y in range(0, height, chunk_size):
-                x_size = min(chunk_size, width - x)
-                y_size = min(chunk_size, height - y)
-                output_file = os.path.join(output_dir, f'chunk_{x}_{y}.tif')
-                futures.append(executor.submit(process_chunk, vrt_path, x, y, x_size, y_size, output_file, resampling,ov_levels))
+    chunks_processing_parameters = []
+    for x in range(0, width, chunk_size):
+        for y in range(0, height, chunk_size):
+            x_size = min(chunk_size, width - x)
+            y_size = min(chunk_size, height - y)
+            output_file = os.path.join(output_dir, f'chunk_{x}_{y}.tif')
+            chunks_processing_parameters.append([vrt_path, x, y, x_size, y_size, output_file, resampling, ov_levels])
 
-        print(f"Need to process {len(futures)} chunks")
-        
-        for future in as_completed(futures):
-            chunk_counter += 1
-            print(f"Processed chunk {chunk_counter}/{total_chunks}", flush=True)
+    print(f"Need to process {len(chunks_processing_parameters)} chunks")
+    
+    for chunk_parameters in chunks_processing_parameters:
+        chunk_counter += 1
+        process_chunk(*chunk_parameters)
+        print(f"Processed chunk {chunk_counter}/{total_chunks}", flush=True)
     
     print(f"Processing complete. Non-empty chunks saved in {output_dir}.", flush=True)
 
