@@ -31,7 +31,7 @@ docker run --rm -t \
 
 ## JPEG compression (lossy)
 
-The "compression" operation uses a Shell script (`scripts/lossy_comp.sh`) that leverages the native GDAL implementation. This script converts input JP2 files into TIFF format, employing JPEG compression with a lossless binary mask. It processes all input files within the specified folder and generates a single output TIFF file, named according to the `NAME` variable, in the designated output folder.
+The "compression" operation uses a Shell script (`scripts/lossy_comp.sh`) that leverages the native GDAL implementation. This script converts input dataset files into TIFF format, employing JPEG compression with a lossless binary mask. It processes all input files within the specified folder and generates a single output TIFF file, named according to the `NAME` variable, in the designated output folder.
 
 To ensure proper execution within a Docker container, the local input and output paths should be bound to the container paths `usr/src/app/input` and `usr/src/app/output`, respectively. This volume mapping still applies for deployment in cloud environments such as Kubernetes, where volumes for the input and output should be defined for the deployed container.
 
