@@ -2,7 +2,7 @@ import os
 import sys
 import glob
 import numpy as np
-from osgeo import gdal,osr
+from osgeo import gdal
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 gdal.SetConfigOption('GDAL_CACHEMAX', os.environ.get('GDAL_CACHE'))
@@ -117,7 +117,7 @@ def process_vrt(vrt_path, chunk_size, output_dir, max_workers, resampling, ov_le
     print(f"Processing complete. Non-empty chunks saved in {output_dir}.", flush=True)
 
 
-def main(input_dir, vrt_path, chunk_size, output_dir, extension, max_workers, resampling, ov_levels):
+def main():
     pattern = f"*.{extension}"
     input_files = [f for f in glob.glob(os.path.join(input_dir, pattern)) if '_warped' not in f]
     if not input_files:
@@ -192,4 +192,5 @@ if __name__ == '__main__':
     resampling = 'bilinear'                             # The resampling algorithm
     ov_levels = 8                                       # The number of overviews
     check_size = 1024                                   # The thumbnail's width and height used to check emtpy chunks
-    main(input_dir, vrt_path, chunk_size, output_dir, extension, max_workers, resampling, ov_levels)
+    
+    main()
