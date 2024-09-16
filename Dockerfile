@@ -3,6 +3,8 @@ FROM python:3.12.4
 ENV EXTENSION="jp2"
 ENV OPERATION="deflate"
 ENV NAME="output"
+ENV GDAL_CACHE="2048"
+ENV GDAL_WORKERS="2"
 
 RUN apt update && apt install gdal-bin libgdal-dev python3-gdal -y \
     && apt clean \

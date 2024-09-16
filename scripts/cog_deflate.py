@@ -5,9 +5,7 @@ import numpy as np
 from osgeo import gdal,osr
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-
-
-gdal.SetConfigOption('GDAL_CACHEMAX', '2048')
+gdal.SetConfigOption('GDAL_CACHEMAX', os.environ.get('GDAL_CACHE'))
 gdal.SetConfigOption('GDAL_NUM_THREADS', 'ALL_CPUS')
 gdal.UseExceptions()
 
@@ -189,9 +187,9 @@ if __name__ == '__main__':
     output_dir = f"{sys.argv[2]}/{os.environ.get('NAME')}"
     extension = os.environ.get('EXTENSION')
     vrt_path = f"{output_dir}/output.vrt"
-    chunk_size = 65536      # The size in pixels (for both width and height) of the output chunk
-    max_workers = 2         # The number of workers to be used in concurrent processing
-    resampling = 'bilinear' # The resampling algorithm
-    ov_levels = 8           # The number of overviews
-    check_size = 1024       # The thumbnail's width and height used to check emtpy chunks
+    chunk_size = 65536                                  # The size in pixels (for both width and height) of the output chunk
+    max_workers = int(os.environ.get('GDAL_WORKERS'))   # The number of workers to be used in concurrent processing
+    resampling = 'bilinear'                             # The resampling algorithm
+    ov_levels = 8                                       # The number of overviews
+    check_size = 1024                                   # The thumbnail's width and height used to check emtpy chunks
     main(input_dir, vrt_path, chunk_size, output_dir, extension, max_workers, resampling, ov_levels)
