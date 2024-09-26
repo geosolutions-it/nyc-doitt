@@ -21,7 +21,8 @@ def get_vrt_size(vrt_path):
     vrt = gdal.Open(vrt_path)
     width = vrt.RasterXSize
     height = vrt.RasterYSize
-    return width, height
+    num_bands = vrt.RasterCount
+    return width, height, num_bands
 
 """
 Check if a chunk is empty. 
@@ -49,10 +50,10 @@ def is_chunk_empty(vrt_path, x_offset, y_offset, x_size, y_size, output_file):
 Given the VRT, we will extract a chunk identified by a rectangular area defined 
 by x,y offsets and x_size, y_size, and we write it as a COG, using deflate compression.
 """
-def process_chunk(vrt_path, x, y, x_size, y_size, output_file, resampling, ov_levels):
+def process_chunk(vrt_path, x, y, x_size, y_size, num_bands, output_file, resampling, ov_levels):
     if not is_chunk_empty(vrt_path, x, y, x_size, y_size, output_file):
-        
         print("Starting single chunk processing...")
+        band_list = get_band_list(num_bands)
         gdal.Translate(
             output_file,
             vrt_path,
@@ -69,7 +70,7 @@ def process_chunk(vrt_path, x, y, x_size, y_size, output_file, resampling, ov_le
                 'OVERVIEWS=IGNORE_EXISTING',
                 'SPARSE_OK=TRUE'
             ],
-            bandList=[1, 2, 3],
+            bandList=band_list,
             noData=0
         )
 
@@ -77,11 +78,20 @@ def process_chunk(vrt_path, x, y, x_size, y_size, output_file, resampling, ov_le
     else:
         print(f"Skipped empty chunk at position ({x}, {y})", flush=True)
 
+def get_band_list(num_bands):
+    """Returns the band list based on the number of bands."""
+    if num_bands >= 3:
+        return [1, 2, 3]
+    elif num_bands == 1:
+        return [1]
+    else:
+        return []
+
 """
 Rewrites the input VRT into multiple Chunk TIFFs in a concurrent processing
 """
 def process_vrt(vrt_path, chunk_size, output_dir, max_workers, resampling, ov_levels):
-    width, height = get_vrt_size(vrt_path)
+    width, height, num_bands = get_vrt_size(vrt_path)
     
     print(f"Processing VRT of size {width}x{height} into chunks of size {chunk_size}x{chunk_size}...", flush=True)
     total_chunks = ((width + chunk_size - 1) // chunk_size) * ((height + chunk_size - 1) // chunk_size)
@@ -94,7 +104,7 @@ def process_vrt(vrt_path, chunk_size, output_dir, max_workers, resampling, ov_le
                 x_size = min(chunk_size, width - x)
                 y_size = min(chunk_size, height - y)
                 output_file = os.path.join(output_dir, f'chunk_{x}_{y}.tif')
-                futures.append(executor.submit(process_chunk, vrt_path, x, y, x_size, y_size, output_file, resampling,ov_levels))
+                futures.append(executor.submit(process_chunk, vrt_path, x, y, x_size, y_size, num_bands, output_file, resampling,ov_levels))
 
         print(f"Need to process {len(futures)} chunks")
         
