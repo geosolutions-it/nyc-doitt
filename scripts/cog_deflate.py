@@ -165,7 +165,11 @@ def correct_rotation(input_file, output_file):
     vrt_ds = gdal.AutoCreateWarpedVRT(src_ds, None, None)
 
     # Translate the VRT to a new file
-    gdal.Translate(output_file, vrt_ds)
+    gdal.Translate(
+        output_file,
+        vrt_ds,
+        creationOptions=['TILED=YES']
+    )
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
