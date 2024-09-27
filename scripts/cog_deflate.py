@@ -68,8 +68,6 @@ def process_chunk(vrt_path, x, y, x_size, y_size, num_bands, output_file, resamp
                 'COMPRESS=DEFLATE', 
                 f'RESAMPLING={resampling}',
                 f'OVERVIEW_COUNT={ov_levels}',
-                'BLOCKXSIZE=512',
-                'BLOCKYSIZE=512',
                 'OVERVIEWS=IGNORE_EXISTING',
                 'SPARSE_OK=TRUE'
             ],
