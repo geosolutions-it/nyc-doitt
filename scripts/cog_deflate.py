@@ -6,7 +6,7 @@ from osgeo import gdal
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 gdal.SetConfigOption('GDAL_CACHEMAX', os.environ.get('GDAL_CACHE'))
-gdal.SetConfigOption('GDAL_NUM_THREADS', 'ALL_CPUS')
+gdal.SetConfigOption('GDAL_NUM_THREADS', '3')
 gdal.UseExceptions()
 
 # Creating the VRT from the input files
