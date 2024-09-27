@@ -6,14 +6,16 @@ from osgeo import gdal,osr
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
+
 gdal.SetConfigOption('GDAL_CACHEMAX', '2048')
 gdal.SetConfigOption('GDAL_NUM_THREADS', 'ALL_CPUS')
 gdal.UseExceptions()
 
 # Creating the VRT from the input files
-def create_vrt(input_files, vrt_path):
+def create_vrt(input_files, vrt_path, is_gray):
     print(f"Creating VRT with {len(input_files)} files...", flush=True)
-    gdal.BuildVRT(vrt_path, input_files)
+    options = gdal.BuildVRTOptions(srcNodata=0, VRTNodata=0) if is_gray else None
+    gdal.BuildVRT(vrt_path, input_files, options=options)
     print(f"VRT created: {vrt_path}", flush=True)
 
 # Getting the VRT image size to compute chunks
@@ -22,6 +24,7 @@ def get_vrt_size(vrt_path):
     width = vrt.RasterXSize
     height = vrt.RasterYSize
     num_bands = vrt.RasterCount
+    vrt = None
     return width, height, num_bands
 
 """
@@ -126,7 +129,8 @@ def main(input_dir, vrt_path, chunk_size, output_dir, extension, max_workers, re
     processed_files = []
     
     for input_file in input_files:
-        if has_rotated_geotransform(input_file):
+        rotated, is_gray = get_image_info(input_file)
+        if rotated:
             
             # Correct the rotation
             base_name, ext = os.path.splitext(os.path.basename(input_file))
@@ -142,21 +146,23 @@ def main(input_dir, vrt_path, chunk_size, output_dir, extension, max_workers, re
         else:
             processed_files.append(input_file)
     
-    create_vrt(processed_files, vrt_path)
+    create_vrt(processed_files, vrt_path, is_gray)
     process_vrt(vrt_path, chunk_size, output_dir, max_workers, resampling, ov_levels)
     
     os.remove(vrt_path)
 
 
-def has_rotated_geotransform(filename):
+def get_image_info(filename):
     dataset = gdal.Open(filename)
     if dataset is None:
-        return False
+        return False, False
+    gray = dataset.RasterCount == 1
     geotransform = dataset.GetGeoTransform()
+    dataset = None
     # Check if there is any rotation in the GeoTransformation coefficients
     if geotransform[2] != 0 or geotransform[4] != 0:
-        return True
-    return False
+        return True, gray
+    return False, gray
 
 def correct_rotation(input_file, output_file):
     src_ds = gdal.Open(input_file)
@@ -170,6 +176,7 @@ def correct_rotation(input_file, output_file):
         vrt_ds,
         creationOptions=['TILED=YES']
     )
+    src_ds = None
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
