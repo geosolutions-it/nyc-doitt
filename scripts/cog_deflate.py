@@ -15,7 +15,10 @@ gdal.UseExceptions()
 def create_vrt(input_files, vrt_path, is_gray):
     print(f"Creating VRT with {len(input_files)} files...", flush=True)
     options = gdal.BuildVRTOptions(srcNodata=0, VRTNodata=0) if is_gray else None
-    gdal.BuildVRT(vrt_path, input_files, options=options)
+    if options:
+        gdal.BuildVRT(vrt_path, input_files, options=options)
+    else:
+        gdal.BuildVRT(vrt_path, input_files) 
     print(f"VRT created: {vrt_path}", flush=True)
 
 # Getting the VRT image size to compute chunks
